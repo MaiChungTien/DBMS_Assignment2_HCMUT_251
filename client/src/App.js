@@ -1,314 +1,453 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
-// --- MOCK DATA (Simulates your SQL Database) ---
-const MOCK_DATA = {
-  profiles: [
-    { ID: 8, Name: 'Student John', Email: 'john@stu.com', Background: 'High School' },
-    { ID: 9, Name: 'Student Jane', Email: 'jane@stu.com', Background: 'Undergraduate' },
-    { ID: 10, Name: 'Student Mike', Email: 'mike@stu.com', Background: 'Masters' },
-  ],
-  instructors: [
-    { Instructor_Name: 'Inst. Smith', Course_Taught: 'Intro to SQL', Creation_Date: '2023-01-01' },
-    { Instructor_Name: 'Inst. Jones', Course_Taught: 'Advanced Python', Creation_Date: '2023-02-01' },
-  ],
-  enrollments: [
-    { Student_Name: 'Student John', Enrolled_Course: 'Intro to SQL', Enrollment_Date: '2023-01-15T08:00:00' },
-    { Student_Name: 'Student Jane', Enrolled_Course: 'Intro to SQL', Enrollment_Date: '2023-01-16T09:30:00' },
-  ],
-  hierarchy: [
-    { courseName: 'Intro to SQL', LessonTitle: 'SQL Basics', Resource_Type: 'video', FileName: 'intro.mp4' },
-    { courseName: 'Intro to SQL', LessonTitle: 'Joins', Resource_Type: 'link', FileName: 'wiki_link' },
-  ]
-};
+// --- MOCK DATA (Simulating DB connection for UI Testing) ---
+const MOCK_COURSES = [
+  { CourseID: 1, courseName: 'Intro to SQL', Description: 'Database basics', Difficulty_Level: 'Beginner', Price: 49.99 },
+  { CourseID: 2, courseName: 'Advanced Python', Description: 'Coding mastery', Difficulty_Level: 'Advanced', Price: 99.99 },
+  { CourseID: 3, courseName: 'Web Design', Description: 'HTML/CSS', Difficulty_Level: 'Intermediate', Price: 79.99 },
+  { CourseID: 4, courseName: 'Calculus 101', Description: 'Math basics', Difficulty_Level: 'Beginner', Price: 59.99 },
+  { CourseID: 5, courseName: 'World History', Description: 'History overview', Difficulty_Level: 'Beginner', Price: 29.99 },
+];
+
+const MOCK_ENROLLMENT = [
+  { StudentID: 8, StudentName: 'Student John', Email: 'john@stu.com', Enrollment_Date: '2023-01-15' },
+  { StudentID: 9, StudentName: 'Student Jane', Email: 'jane@stu.com', Enrollment_Date: '2023-01-16' },
+];
 
 function App() {
-  const [activeTab, setActiveTab] = useState('task1');
-  const [viewData, setViewData] = useState([]);
-  const [viewTitle, setViewTitle] = useState('');
+  const [activeTab, setActiveTab] = useState('courses');
   const [isLoading, setIsLoading] = useState(false);
+  const [notification, setNotification] = useState({ type: '', message: '' });
+
+  // --- STATE FOR REQUIREMENT 3.1 & 3.2 (COURSE MANAGEMENT) ---
+  const [courses, setCourses] = useState(MOCK_COURSES);
+  const [filteredCourses, setFilteredCourses] = useState(MOCK_COURSES);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortConfig, setSortConfig] = useState({ key: 'CourseID', direction: 'asc' });
   
-  // Notification State
-  const [message, setMessage] = useState(null);
-  const [error, setError] = useState(null);
+  // Modal State for Insert/Update
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState('insert'); // 'insert' or 'update'
+  const [currentCourse, setCurrentCourse] = useState({ CourseID: '', courseName: '', Description: '', Difficulty_Level: 'Beginner', Price: '' });
 
-  // Form States
-  const [courseForm, setCourseForm] = useState({ id: '', name: '', desc: '', diff: 'Beginner', price: 0 });
-  const [enrollForm, setEnrollForm] = useState({ studentId: '', courseId: '' });
-  const [evalForm, setEvalForm] = useState({ studentId: '', courseId: '' });
+  // --- STATE FOR REQUIREMENT 3.3 (OTHER PROCEDURES) ---
+  const [enrollmentList, setEnrollmentList] = useState([]);
+  const [enrollCourseId, setEnrollCourseId] = useState('');
   const [evalResult, setEvalResult] = useState(null);
+  const [evalForm, setEvalForm] = useState({ studentId: '', courseId: '' });
 
-  // --- MOCK HANDLERS (Simulate API Calls) ---
 
-  const simulateNetworkRequest = (callback) => {
+  // --- HELPERS ---
+  const showNotification = (type, msg) => {
+    setNotification({ type, message: msg });
+    setTimeout(() => setNotification({ type: '', message: '' }), 4000);
+  };
+
+  const simulateLoading = (callback) => {
     setIsLoading(true);
     setTimeout(() => {
       callback();
       setIsLoading(false);
-    }, 600); // Simulate 600ms network delay
+    }, 500);
   };
 
-  // Task 1: View Data
-  const fetchMockView = (key, title) => {
-    simulateNetworkRequest(() => {
-      setViewData(MOCK_DATA[key]);
-      setViewTitle(title);
-      setError(null);
-      setMessage(null);
-    });
+  // --- HANDLERS FOR REQ 3.1 & 3.2 (COURSE CRUD + LIST) ---
+
+  // Search & Filter Logic (Req 3.2)
+  useEffect(() => {
+    let result = [...courses];
+    if (searchTerm) {
+      result = result.filter(c => 
+        c.courseName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.Description.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+    
+    // Sorting Logic (Req 3.2)
+    if (sortConfig.key) {
+        result.sort((a, b) => {
+            if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction === 'asc' ? -1 : 1;
+            if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }
+    setFilteredCourses(result);
+  }, [courses, searchTerm, sortConfig]);
+
+  const handleSort = (key) => {
+    let direction = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
   };
 
-  // Task 2: Insert/Update/Delete
-  const handleInsertCourse = () => { 
-    simulateNetworkRequest(() => {
-      if (!courseForm.name) {
-        setError("Error: Course Name cannot be empty (SQL Validation)");
-        setMessage(null);
-      } else {
-        setMessage(`Success: Course '${courseForm.name}' Inserted (Test 1 Passed)`);
-        setError(null);
+  // INSERT / UPDATE Handler (Req 3.1)
+  const handleSaveCourse = (e) => {
+    e.preventDefault();
+    simulateLoading(() => {
+      // Input Validation (Req 3.2)
+      if (!currentCourse.courseName || currentCourse.Price < 0) {
+        showNotification('error', 'Error: Invalid input. Name required, Price must be >= 0.');
+        return;
       }
-    });
-  };
 
-  const handleUpdateCourse = () => {
-    simulateNetworkRequest(() => {
-        setMessage(`Success: Course ID ${courseForm.id} Updated (Test 2 Passed)`);
-        setError(null);
-    });
-  };
-
-  const handleDeleteCourse = () => {
-    simulateNetworkRequest(() => {
-      // Simulate Logic: If ID is 1, fail (because students enroll). If ID is 99, success.
-      if (courseForm.id === '1') {
-        setError("Error: Cannot delete course because students are currently enrolled (Constraint Check)");
-        setMessage(null);
+      if (modalMode === 'insert') {
+        // Calls sp_insert_course
+        const newId = Math.max(...courses.map(c => c.CourseID)) + 1;
+        const newCourse = { ...currentCourse, CourseID: newId };
+        setCourses([...courses, newCourse]);
+        showNotification('success', `Course "${newCourse.courseName}" created successfully!`);
       } else {
-        setMessage("Success: Course Deleted (Test 4 Passed)");
-        setError(null);
+        // Calls sp_update_course
+        setCourses(courses.map(c => c.CourseID === currentCourse.CourseID ? currentCourse : c));
+        showNotification('success', `Course ID ${currentCourse.CourseID} updated successfully!`);
       }
+      setIsModalOpen(false);
     });
   };
 
-  // Task 2: Trigger Simulation
-  const handleEnroll = () => { 
-    simulateNetworkRequest(() => {
-      // Simulate Business Rule: ID 3 is an instructor for Course 1
-      if (enrollForm.studentId === '3' && enrollForm.courseId === '1') {
-        setError("Trigger Blocked Action: Instructor cannot enroll as a student in their own course.");
-        setMessage(null);
-      } else {
-        setMessage("Success: Student Enrolled (Test 3 Passed)");
-        setError(null);
-      }
+  // DELETE Handler (Req 3.2 - Logical Error Handling)
+  const handleDelete = (id) => {
+    if (!window.confirm("Are you sure you want to delete this course?")) return;
+
+    simulateLoading(() => {
+        // Logical Error Handling Simulation (Req 3.2)
+        if (id === 1) {
+            showNotification('error', 'Database Error: Cannot delete Course 1 because students are currently enrolled.');
+        } else {
+            setCourses(courses.filter(c => c.CourseID !== id));
+            showNotification('success', 'Course deleted successfully.');
+        }
     });
   };
 
-  // Task 2: Function Simulation
+  const openModal = (mode, course = null) => {
+    setModalMode(mode);
+    if (mode === 'update' && course) {
+      setCurrentCourse(course);
+    } else {
+      setCurrentCourse({ CourseID: '', courseName: '', Description: '', Difficulty_Level: 'Beginner', Price: '' });
+    }
+    setIsModalOpen(true);
+  };
+
+  // --- HANDLERS FOR REQ 3.3 (OTHER PROCEDURES) ---
+
+  // Get Enrollment List (Calls Get_Student_Enrollment_List)
+  const handleGetEnrollments = () => {
+    simulateLoading(() => {
+        if (!enrollCourseId) {
+            showNotification('error', 'Please enter a Course ID.');
+            return;
+        }
+        setEnrollmentList(MOCK_ENROLLMENT); // In real app, fetch based on enrollCourseId
+        showNotification('success', `Retrieved students for Course ID ${enrollCourseId}`);
+    });
+  };
+
+  // Calculate Grade (Calls Calculate_Final_Grade Function)
   const handleEvaluate = () => { 
-    simulateNetworkRequest(() => {
-      // Hardcoded simulation for Student 8 (Safe) vs Student 9 (Risk)
+    simulateLoading(() => {
       if (evalForm.studentId === '8') {
         setEvalResult({ FinalGrade: 85.5, RiskLevel: 'Safe' });
+        showNotification('success', 'Calculation complete.');
       } else if (evalForm.studentId === '9') {
         setEvalResult({ FinalGrade: 45.0, RiskLevel: 'High Risk' });
+        showNotification('warning', 'Student is at High Risk!');
       } else {
-        setEvalResult({ FinalGrade: 0, RiskLevel: 'No Data' });
+        setEvalResult(null);
+        showNotification('error', 'Student or Course not found.');
       }
-      setError(null);
     });
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 p-8 font-sans">
-      <div className="max-w-6xl mx-auto bg-white shadow-lg rounded-lg overflow-hidden">
-        
-        {/* Header */}
-        <div className="bg-blue-900 text-white p-6 shadow-md">
-          <div className="flex justify-between items-center">
+    <div className="min-h-screen bg-gray-50 font-sans text-gray-800">
+      
+      {/* HEADER */}
+      <header className="bg-blue-900 text-white shadow-lg">
+        <div className="max-w-7xl mx-auto px-6 py-5 flex justify-between items-center">
             <div>
-                <h1 className="text-3xl font-bold tracking-tight">Assignment 2: Database System</h1>
-                <p className="mt-2 text-blue-200">Student: Mai Chung Tien | ID: 2353177</p>
+                <h1 className="text-2xl font-bold tracking-wide">E-Learning Management System</h1>
+                <p className="text-blue-200 text-sm mt-1">Assignment 2 - Part 3: Application Implementation</p>
             </div>
-            <div className="bg-yellow-400 text-blue-900 px-3 py-1 rounded font-bold text-sm">
-                UI TEST MODE (No DB)
+            <div className="bg-yellow-400 text-blue-900 px-3 py-1 rounded font-bold text-xs uppercase tracking-wider">
+                Mock UI Mode
             </div>
-          </div>
         </div>
+      </header>
 
-        {/* Tab Navigation */}
-        <div className="flex border-b bg-gray-50">
+      {/* NAVIGATION TABS */}
+      <div className="bg-white border-b shadow-sm sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto flex">
           <button 
-            onClick={() => setActiveTab('task1')}
-            className={`flex-1 py-4 text-center font-semibold transition-colors duration-200 ${activeTab === 'task1' ? 'border-b-4 border-blue-600 bg-white text-blue-800' : 'text-gray-500 hover:text-blue-600 hover:bg-gray-100'}`}
+            onClick={() => setActiveTab('courses')}
+            className={`flex-1 py-4 text-center font-semibold text-sm uppercase tracking-wide transition-colors ${activeTab === 'courses' ? 'border-b-4 border-blue-600 text-blue-800 bg-blue-50' : 'text-gray-500 hover:bg-gray-50'}`}
           >
-            Task 1: View Data (Tests 1-4)
+            req 3.1 & 3.2: Course Management
           </button>
           <button 
-            onClick={() => setActiveTab('task2')}
-            className={`flex-1 py-4 text-center font-semibold transition-colors duration-200 ${activeTab === 'task2' ? 'border-b-4 border-blue-600 bg-white text-blue-800' : 'text-gray-500 hover:text-blue-600 hover:bg-gray-100'}`}
+            onClick={() => setActiveTab('other')}
+            className={`flex-1 py-4 text-center font-semibold text-sm uppercase tracking-wide transition-colors ${activeTab === 'other' ? 'border-b-4 border-blue-600 text-blue-800 bg-blue-50' : 'text-gray-500 hover:bg-gray-50'}`}
           >
-            Task 2: Procedures & Functions (Tests 1-8)
+            req 3.3: Other Procedures
           </button>
-        </div>
-
-        {/* Content Area */}
-        <div className="p-6 min-h-[500px]">
-          
-          {/* Notifications */}
-          {isLoading && <div className="mb-4 text-blue-600 font-semibold animate-pulse">Processing Request...</div>}
-          
-          {message && (
-            <div className="mb-4 p-4 bg-green-100 text-green-700 rounded border border-green-400 flex items-center shadow-sm">
-                <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd"/></svg>
-                {message}
-            </div>
-          )}
-          {error && (
-            <div className="mb-4 p-4 bg-red-100 text-red-700 rounded border border-red-400 font-bold flex items-center shadow-sm">
-                 <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd"/></svg>
-                {error}
-            </div>
-          )}
-
-          {/* TASK 1 UI */}
-          {activeTab === 'task1' && (
-            <div className="animate-fade-in">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <button onClick={() => fetchMockView('profiles', 'Full Student Profiles')} className="bg-blue-600 text-white p-3 rounded shadow hover:bg-blue-700 transition active:scale-95">Test 1: Profiles</button>
-                <button onClick={() => fetchMockView('instructors', 'Instructors & Courses')} className="bg-blue-600 text-white p-3 rounded shadow hover:bg-blue-700 transition active:scale-95">Test 2: Instructors</button>
-                <button onClick={() => fetchMockView('enrollments', 'Student Enrollments')} className="bg-blue-600 text-white p-3 rounded shadow hover:bg-blue-700 transition active:scale-95">Test 3: Enrollments</button>
-                <button onClick={() => fetchMockView('hierarchy', 'Course Content Hierarchy')} className="bg-blue-600 text-white p-3 rounded shadow hover:bg-blue-700 transition active:scale-95">Test 4: Hierarchy</button>
-              </div>
-
-              {viewTitle && (
-                <div>
-                  <h3 className="text-xl font-bold mb-4 border-l-4 border-blue-500 pl-3 text-gray-800">{viewTitle}</h3>
-                  <div className="overflow-x-auto border rounded-lg shadow-sm">
-                    <table className="w-full text-left border-collapse">
-                      <thead className="bg-gray-100 text-gray-600 uppercase text-sm leading-normal">
-                        <tr>
-                          {viewData.length > 0 && Object.keys(viewData[0]).map(key => (
-                            <th key={key} className="p-3 border-b border-gray-300 font-bold">{key}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="text-gray-700 text-sm">
-                        {viewData.map((row, i) => (
-                          <tr key={i} className="hover:bg-blue-50 border-b transition-colors">
-                            {Object.values(row).map((val, j) => (
-                              <td key={j} className="p-3">{val}</td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* TASK 2 UI */}
-          {activeTab === 'task2' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-fade-in">
-              
-              {/* Left Column: Management */}
-              <div className="bg-white p-6 rounded-lg border shadow-sm hover:shadow-md transition-shadow">
-                <h3 className="text-lg font-bold mb-4 text-gray-800 border-b pb-2">Course Management (Tests 1, 2, 4)</h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Course ID</label>
-                    <input placeholder="1 (Try 1 to fail delete)" className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-400 outline-none transition" value={courseForm.id} onChange={e => setCourseForm({...courseForm, id: e.target.value})} />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Course Name</label>
-                    <input placeholder="Python for Beginners" className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-400 outline-none transition" value={courseForm.name} onChange={e => setCourseForm({...courseForm, name: e.target.value})} />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Difficulty</label>
-                        <select className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-400 outline-none transition" value={courseForm.diff} onChange={e => setCourseForm({...courseForm, diff: e.target.value})}>
-                            <option>Beginner</option><option>Intermediate</option><option>Advanced</option>
-                        </select>
-                     </div>
-                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Price</label>
-                        <input type="number" placeholder="19.99" className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-400 outline-none transition" value={courseForm.price} onChange={e => setCourseForm({...courseForm, price: e.target.value})} />
-                     </div>
-                  </div>
-                  
-                  <div className="flex gap-2 pt-4">
-                    <button onClick={handleInsertCourse} className="flex-1 bg-green-600 text-white p-2 rounded hover:bg-green-700 shadow transition transform active:scale-95">Insert (Test 1)</button>
-                    <button onClick={handleUpdateCourse} className="flex-1 bg-yellow-500 text-white p-2 rounded hover:bg-yellow-600 shadow transition transform active:scale-95">Update (Test 2)</button>
-                    <button onClick={handleDeleteCourse} className="flex-1 bg-red-600 text-white p-2 rounded hover:bg-red-700 shadow transition transform active:scale-95">Delete (Test 4)</button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Right Column: Enrollment & Functions */}
-              <div className="space-y-6">
-                
-                {/* Enrollment / Trigger Test */}
-                <div className="bg-white p-6 rounded-lg border shadow-sm hover:shadow-md transition-shadow">
-                  <h3 className="text-lg font-bold mb-4 text-gray-800 border-b pb-2">Enrollment & Trigger (Test 3)</h3>
-                  <p className="text-sm text-gray-600 mb-4 bg-blue-50 p-2 rounded border border-blue-100">
-                    <span className="font-bold">Test Scenario:</span> Try enrolling <b>Instructor ID 3</b> into <b>Course ID 1</b> to see the Trigger error UI.
-                  </p>
-                  <div className="flex gap-2 items-end">
-                    <div className="flex-1">
-                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">User ID</label>
-                         <input placeholder="3" className="w-full p-2 border rounded focus:ring-2 focus:ring-purple-400 outline-none" value={enrollForm.studentId} onChange={e => setEnrollForm({...enrollForm, studentId: e.target.value})} />
-                    </div>
-                    <div className="flex-1">
-                         <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Course ID</label>
-                         <input placeholder="1" className="w-full p-2 border rounded focus:ring-2 focus:ring-purple-400 outline-none" value={enrollForm.courseId} onChange={e => setEnrollForm({...enrollForm, courseId: e.target.value})} />
-                    </div>
-                    <button onClick={handleEnroll} className="bg-purple-600 text-white px-6 py-2 rounded hover:bg-purple-700 shadow transition transform active:scale-95 h-[42px]">Enroll</button>
-                  </div>
-                </div>
-
-                {/* Grade Evaluation */}
-                <div className="bg-white p-6 rounded-lg border shadow-sm hover:shadow-md transition-shadow">
-                  <h3 className="text-lg font-bold mb-4 text-gray-800 border-b pb-2">Grade & Risk (Tests 7 & 8)</h3>
-                  <p className="text-sm text-gray-600 mb-4 bg-blue-50 p-2 rounded border border-blue-100">
-                    <span className="font-bold">Test Scenario:</span> 
-                    <br/>- ID <b>8</b>: Safe (Score > 50)
-                    <br/>- ID <b>9</b>: High Risk (Score &lt; 50)
-                  </p>
-                  <div className="flex gap-2 mb-4 items-end">
-                    <div className="flex-1">
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Student ID</label>
-                        <input placeholder="8 or 9" className="w-full p-2 border rounded focus:ring-2 focus:ring-indigo-400 outline-none" value={evalForm.studentId} onChange={e => setEvalForm({...evalForm, studentId: e.target.value})} />
-                    </div>
-                    <div className="flex-1">
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Course ID</label>
-                        <input placeholder="1" className="w-full p-2 border rounded focus:ring-2 focus:ring-indigo-400 outline-none" value={evalForm.courseId} onChange={e => setEvalForm({...evalForm, courseId: e.target.value})} />
-                    </div>
-                    <button onClick={handleEvaluate} className="bg-indigo-600 text-white px-6 py-2 rounded hover:bg-indigo-700 shadow transition transform active:scale-95 h-[42px]">Calc</button>
-                  </div>
-                  
-                  {evalResult && (
-                    <div className="bg-gray-50 p-4 border rounded shadow-inner flex justify-between items-center">
-                      <div>
-                        <p className="text-sm text-gray-600">Final Grade (Test 7)</p>
-                        <p className="text-xl font-bold text-gray-800">{evalResult.FinalGrade}</p>
-                      </div>
-                      <div className="text-right">
-                         <p className="text-sm text-gray-600">Risk Level (Test 8)</p>
-                         <span className={`inline-block mt-1 px-3 py-1 rounded-full text-sm font-bold ${evalResult.RiskLevel === 'Safe' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                          {evalResult.RiskLevel}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-              </div>
-            </div>
-          )}
         </div>
       </div>
+
+      <main className="max-w-7xl mx-auto p-6">
+        
+        {/* NOTIFICATION TOAST */}
+        {notification.message && (
+            <div className={`fixed top-24 right-6 p-4 rounded shadow-lg border-l-4 z-50 animate-bounce ${notification.type === 'error' ? 'bg-red-100 border-red-500 text-red-700' : notification.type === 'warning' ? 'bg-yellow-100 border-yellow-500 text-yellow-800' : 'bg-green-100 border-green-500 text-green-700'}`}>
+                <div className="flex items-center">
+                    <span className="font-bold mr-2">{notification.type === 'error' ? 'Error:' : notification.type === 'warning' ? 'Warning:' : 'Success:'}</span>
+                    {notification.message}
+                </div>
+            </div>
+        )}
+
+        {/* LOADING SPINNER OVERLAY */}
+        {isLoading && (
+            <div className="fixed inset-0 bg-black bg-opacity-30 flex items-center justify-center z-50">
+                <div className="bg-white p-5 rounded shadow-lg flex items-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-900 mr-3"></div>
+                    <span className="font-semibold text-gray-700">Processing Database Request...</span>
+                </div>
+            </div>
+        )}
+
+        {/* === TAB 1: COURSE MANAGEMENT (Req 3.1 & 3.2) === */}
+        {activeTab === 'courses' && (
+            <div className="space-y-6">
+                
+                {/* TOOLBAR: SEARCH & CREATE (Req 3.2) */}
+                <div className="bg-white p-4 rounded-lg shadow border border-gray-200 flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div className="flex w-full md:w-auto gap-2">
+                        <div className="relative w-full md:w-80">
+                            <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-gray-400">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                            </span>
+                            <input 
+                                type="text" 
+                                placeholder="Search courses by name or desc..." 
+                                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                            />
+                        </div>
+                    </div>
+                    <button 
+                        onClick={() => openModal('insert')}
+                        className="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-medium shadow transition transform active:scale-95 flex items-center justify-center gap-2"
+                    >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
+                        New Course
+                    </button>
+                </div>
+
+                {/* DATA LIST TABLE (Req 3.2) */}
+                <div className="bg-white rounded-lg shadow overflow-hidden border border-gray-200">
+                    <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-100">
+                            <tr>
+                                {['CourseID', 'courseName', 'Difficulty_Level', 'Price'].map((key) => (
+                                    <th 
+                                        key={key}
+                                        onClick={() => handleSort(key)}
+                                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-200 transition select-none"
+                                    >
+                                        <div className="flex items-center gap-1">
+                                            {key.replace('_', ' ')}
+                                            {sortConfig.key === key && (
+                                                <span>{sortConfig.direction === 'asc' ? '↑' : '↓'}</span>
+                                            )}
+                                        </div>
+                                    </th>
+                                ))}
+                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                            {filteredCourses.length > 0 ? (
+                                filteredCourses.map((course) => (
+                                    <tr key={course.CourseID} className="hover:bg-blue-50 transition-colors">
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">#{course.CourseID}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="text-sm font-medium text-gray-900">{course.courseName}</div>
+                                            <div className="text-sm text-gray-500">{course.Description}</div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${course.Difficulty_Level === 'Beginner' ? 'bg-green-100 text-green-800' : course.Difficulty_Level === 'Advanced' ? 'bg-red-100 text-red-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                                                {course.Difficulty_Level}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${course.Price}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                            <button onClick={() => openModal('update', course)} className="text-indigo-600 hover:text-indigo-900 mr-4">Edit</button>
+                                            <button onClick={() => handleDelete(course.CourseID)} className="text-red-600 hover:text-red-900">Delete</button>
+                                        </td>
+                                    </tr>
+                                ))
+                            ) : (
+                                <tr>
+                                    <td colSpan="5" className="px-6 py-10 text-center text-gray-500">No courses found matching your search.</td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        )}
+
+        {/* === TAB 2: OTHER PROCEDURES (Req 3.3) === */}
+        {activeTab === 'other' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                
+                {/* 1. Enrollment List Procedure (Req 3.3 - Procedure 1) */}
+                <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
+                    <h3 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b">Get Enrollment List (Proc 2.3)</h3>
+                    <p className="text-sm text-gray-500 mb-4">Demonstrates calling <code>Get_Student_Enrollment_List</code> with a WHERE clause parameter.</p>
+                    
+                    <div className="flex gap-2 mb-4">
+                        <input 
+                            type="number" 
+                            placeholder="Enter Course ID (e.g., 1)" 
+                            className="flex-1 p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                            value={enrollCourseId}
+                            onChange={(e) => setEnrollCourseId(e.target.value)}
+                        />
+                        <button onClick={handleGetEnrollments} className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Search</button>
+                    </div>
+
+                    {enrollmentList.length > 0 && (
+                        <div className="bg-gray-50 rounded border p-3">
+                            <h4 className="font-semibold text-sm text-gray-700 mb-2">Results:</h4>
+                            <ul className="space-y-2">
+                                {enrollmentList.map((stu) => (
+                                    <li key={stu.StudentID} className="text-sm bg-white p-2 rounded shadow-sm flex justify-between">
+                                        <span>{stu.StudentName}</span>
+                                        <span className="text-gray-400 text-xs">{stu.Enrollment_Date}</span>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+                </div>
+
+                {/* 2. Calculate Grade Function (Req 3.3 - Function 1) */}
+                <div className="bg-white p-6 rounded-lg shadow border border-gray-200">
+                    <h3 className="text-lg font-bold text-gray-800 mb-4 pb-2 border-b">Calculate Grade & Risk (Func 2.4)</h3>
+                    <p className="text-sm text-gray-500 mb-4">Demonstrates calling <code>Calculate_Final_Grade</code> and <code>Evaluate_Student_Risk_Level</code>.</p>
+                    
+                    <div className="space-y-3 mb-4">
+                        <input 
+                            placeholder="Student ID (Try 8 for Safe, 9 for Risk)" 
+                            className="w-full p-2 border rounded focus:ring-2 focus:ring-indigo-500 outline-none"
+                            value={evalForm.studentId}
+                            onChange={(e) => setEvalForm({...evalForm, studentId: e.target.value})}
+                        />
+                         <input 
+                            placeholder="Course ID (e.g. 1)" 
+                            className="w-full p-2 border rounded focus:ring-2 focus:ring-indigo-500 outline-none"
+                            value={evalForm.courseId}
+                            onChange={(e) => setEvalForm({...evalForm, courseId: e.target.value})}
+                        />
+                        <button onClick={handleEvaluate} className="w-full bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">Calculate Status</button>
+                    </div>
+
+                    {evalResult && (
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-gray-50 p-3 rounded text-center border">
+                                <div className="text-xs text-gray-500 uppercase font-bold">Final Grade</div>
+                                <div className="text-2xl font-bold text-gray-800">{evalResult.FinalGrade}</div>
+                            </div>
+                            <div className={`p-3 rounded text-center border ${evalResult.RiskLevel === 'Safe' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                                <div className="text-xs text-gray-500 uppercase font-bold">Risk Level</div>
+                                <div className={`text-xl font-bold ${evalResult.RiskLevel === 'Safe' ? 'text-green-700' : 'text-red-700'}`}>{evalResult.RiskLevel}</div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+            </div>
+        )}
+
+        {/* === MODAL FOR INSERT/UPDATE (Req 3.1) === */}
+        {isModalOpen && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40">
+                <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6 transform transition-all">
+                    <h3 className="text-xl font-bold text-gray-900 mb-4">
+                        {modalMode === 'insert' ? 'Create New Course' : `Edit Course #${currentCourse.CourseID}`}
+                    </h3>
+                    
+                    <form onSubmit={handleSaveCourse} className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Course Name</label>
+                            <input 
+                                className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" 
+                                value={currentCourse.courseName} 
+                                onChange={(e) => setCurrentCourse({...currentCourse, courseName: e.target.value})}
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                            <textarea 
+                                className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" 
+                                rows="2"
+                                value={currentCourse.Description} 
+                                onChange={(e) => setCurrentCourse({...currentCourse, Description: e.target.value})}
+                            />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Difficulty</label>
+                                <select 
+                                    className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                                    value={currentCourse.Difficulty_Level} 
+                                    onChange={(e) => setCurrentCourse({...currentCourse, Difficulty_Level: e.target.value})}
+                                >
+                                    <option>Beginner</option>
+                                    <option>Intermediate</option>
+                                    <option>Advanced</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Price</label>
+                                <input 
+                                    type="number" 
+                                    step="0.01"
+                                    className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500 outline-none" 
+                                    value={currentCourse.Price} 
+                                    onChange={(e) => setCurrentCourse({...currentCourse, Price: e.target.value})}
+                                    required
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex gap-3 pt-4 border-t mt-4">
+                            <button 
+                                type="button" 
+                                onClick={() => setIsModalOpen(false)}
+                                className="flex-1 bg-gray-100 text-gray-700 py-2 rounded hover:bg-gray-200"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                type="submit" 
+                                className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700 shadow-md"
+                            >
+                                {modalMode === 'insert' ? 'Save Course' : 'Update Course'}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        )}
+
+      </main>
     </div>
   );
 }
